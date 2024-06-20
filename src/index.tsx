@@ -18,6 +18,7 @@ import Animated, {
   Extrapolate,
   WithSpringConfig,
   useAnimatedProps,
+  SharedValue,
 } from "react-native-reanimated";
 
 const isWeb = Platform.OS === "web";
@@ -85,6 +86,7 @@ type Props<T> = {
   snapPointsLeft?: number[];
   snapPointsRight?: number[];
   swipeDamping?: number;
+  onUpdate?: (currentSharedValue: SharedValue<number>) => void;
 };
 
 export type SwipeableItemImperativeRef = {
@@ -114,6 +116,7 @@ function SwipeableItem<T>(
     swipeDamping = 10,
     onChange = () => {},
     animationConfig = {},
+    onUpdate = () => {},
   } = props;
 
   const springConfig: WithSpringConfig = {
@@ -278,14 +281,15 @@ function SwipeableItem<T>(
     return refObject;
   });
 
+  const zero = useSharedValue(0);
+
   function onAnimationEnd(_openDirection: OpenDirection, snapPoint: number) {
     setOpenDirection(_openDirection);
     const didChange =
       openDirection !== OpenDirection.NONE ||
       _openDirection !== OpenDirection.NONE;
-    if (didChange) {
-      onChange({ openDirection: _openDirection, snapPoint });
-    }
+    if (didChange) onChange({ openDirection: _openDirection, snapPoint });
+    else onUpdate(zero);
   }
 
   const startX = useSharedValue(0);
@@ -297,11 +301,13 @@ function SwipeableItem<T>(
         // remove when fixed: https://github.com/software-mansion/react-native-gesture-handler/issues/2057
         startX.value = animStatePos.value;
         isGestureActive.value = true;
+        runOnJS(onUpdate)(animStatePos);
       }
     })
     .onStart(() => {
       startX.value = animStatePos.value;
       isGestureActive.value = true;
+      runOnJS(onUpdate)(animStatePos);
     })
     .onUpdate((evt) => {
       const rawVal = evt.translationX + startX.value;
@@ -312,6 +318,7 @@ function SwipeableItem<T>(
         Extrapolate.CLAMP
       );
       animStatePos.value = clampedVal;
+      runOnJS(onUpdate)(animStatePos);
     })
     .onEnd((evt) => {
       isGestureActive.value = false;
